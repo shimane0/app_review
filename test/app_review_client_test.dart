@@ -58,7 +58,10 @@ void main() {
 
     group('openStoreListing', () {
       test('sends iosAppId on iOS, androidPackageName on Android', () async {
-        await client.openStoreListing(iosAppId: '123456789', androidPackageName: 'com.example.app');
+        await client.openStoreListing(
+          iosAppId: '123456789',
+          androidPackageName: 'com.example.app',
+        );
 
         expect(fakeApi.openStoreListingCallCount, 1);
         if (Platform.isIOS) {
@@ -75,7 +78,10 @@ void main() {
       });
 
       test('sends only iosAppId on iOS even when both provided', () async {
-        await client.openStoreListing(iosAppId: '123456789', androidPackageName: 'com.example.app');
+        await client.openStoreListing(
+          iosAppId: '123456789',
+          androidPackageName: 'com.example.app',
+        );
 
         // On the current test platform (not iOS), this should be the Android value
         if (!Platform.isIOS) {

@@ -130,7 +130,10 @@ class ReviewController {
   Future<void> recordFirstLaunch() async {
     final prefs = await _getPrefs();
     if (prefs.getString(_keyFirstLaunchedAt) != null) return;
-    await prefs.setString(_keyFirstLaunchedAt, DateTime.now().toIso8601String());
+    await prefs.setString(
+      _keyFirstLaunchedAt,
+      DateTime.now().toIso8601String(),
+    );
   }
 
   /// Record a user action (e.g. share, save, complete).
@@ -166,7 +169,9 @@ class ReviewController {
     if (firstLaunchedStr == null) return false;
     final firstLaunched = DateTime.tryParse(firstLaunchedStr);
     if (firstLaunched == null) return false;
-    final daysSinceFirstLaunch = DateTime.now().difference(firstLaunched).inDays;
+    final daysSinceFirstLaunch = DateTime.now()
+        .difference(firstLaunched)
+        .inDays;
     if (daysSinceFirstLaunch < condition.minDaysFromFirstLaunch) return false;
 
     // Condition 3: request count limit
