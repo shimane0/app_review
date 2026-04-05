@@ -98,7 +98,10 @@ void main() {
         await prefs.setInt('app_review_action_count', 5);
         // First launch 10 days ago (default minDaysFromFirstLaunch = 3)
         final tenDaysAgo = DateTime.now().subtract(const Duration(days: 10));
-        await prefs.setString('app_review_first_launched_at', tenDaysAgo.toIso8601String());
+        await prefs.setString(
+          'app_review_first_launched_at',
+          tenDaysAgo.toIso8601String(),
+        );
         // Request count < 3 (default maxRequestCount)
         await prefs.setInt('app_review_request_count', 0);
       }
@@ -160,7 +163,10 @@ void main() {
       });
 
       test('increments request count even on failure', () async {
-        fakeApi.requestReviewResult = ReviewResult(success: false, errorMessage: 'fail');
+        fakeApi.requestReviewResult = ReviewResult(
+          success: false,
+          errorMessage: 'fail',
+        );
         final controller = createController();
         await makeEligible();
 
@@ -172,7 +178,9 @@ void main() {
 
       test('invokes onReviewRequested callback', () async {
         ReviewResult? callbackResult;
-        final controller = createController(onReviewRequested: (r) => callbackResult = r);
+        final controller = createController(
+          onReviewRequested: (r) => callbackResult = r,
+        );
         await makeEligible();
 
         await controller.requestReviewIfEligible();
@@ -186,26 +194,41 @@ void main() {
       Future<void> makeEligible() async {
         await prefs.setInt('app_review_action_count', 5);
         final tenDaysAgo = DateTime.now().subtract(const Duration(days: 10));
-        await prefs.setString('app_review_first_launched_at', tenDaysAgo.toIso8601String());
+        await prefs.setString(
+          'app_review_first_launched_at',
+          tenDaysAgo.toIso8601String(),
+        );
         await prefs.setInt('app_review_request_count', 0);
       }
 
-      test('opens store listing when review fails and fallback enabled', () async {
-        fakeApi.requestReviewResult = ReviewResult(success: false, errorMessage: 'fail');
-        fakeApi.openStoreListingResult = ReviewResult(success: true);
+      test(
+        'opens store listing when review fails and fallback enabled',
+        () async {
+          fakeApi.requestReviewResult = ReviewResult(
+            success: false,
+            errorMessage: 'fail',
+          );
+          fakeApi.openStoreListingResult = ReviewResult(success: true);
 
-        final controller = createController(iosAppId: '123456789', fallbackToStoreListing: true);
-        await makeEligible();
+          final controller = createController(
+            iosAppId: '123456789',
+            fallbackToStoreListing: true,
+          );
+          await makeEligible();
 
-        final result = await controller.requestReviewIfEligible();
+          final result = await controller.requestReviewIfEligible();
 
-        expect(result, isTrue);
-        expect(fakeApi.requestReviewCallCount, 1);
-        expect(fakeApi.openStoreListingCallCount, 1);
-      });
+          expect(result, isTrue);
+          expect(fakeApi.requestReviewCallCount, 1);
+          expect(fakeApi.openStoreListingCallCount, 1);
+        },
+      );
 
       test('does not open store listing when review succeeds', () async {
-        final controller = createController(iosAppId: '123456789', fallbackToStoreListing: true);
+        final controller = createController(
+          iosAppId: '123456789',
+          fallbackToStoreListing: true,
+        );
         await makeEligible();
 
         await controller.requestReviewIfEligible();
@@ -214,7 +237,10 @@ void main() {
       });
 
       test('does not open store listing when fallback disabled', () async {
-        fakeApi.requestReviewResult = ReviewResult(success: false, errorMessage: 'fail');
+        fakeApi.requestReviewResult = ReviewResult(
+          success: false,
+          errorMessage: 'fail',
+        );
 
         final controller = createController(fallbackToStoreListing: false);
         await makeEligible();

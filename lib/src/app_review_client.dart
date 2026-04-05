@@ -43,7 +43,10 @@ class AppReviewClient {
   ///
   /// Each parameter is only used on its respective platform, so
   /// specifying both is safe for cross-platform code.
-  Future<ReviewResult> openStoreListing({String? iosAppId, String? androidPackageName}) {
+  Future<ReviewResult> openStoreListing({
+    String? iosAppId,
+    String? androidPackageName,
+  }) {
     final appId = Platform.isIOS ? iosAppId : androidPackageName;
     return _api.openStoreListing(appId);
   }
