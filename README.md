@@ -61,10 +61,7 @@ final result = await client.requestReview();
 
 if (!result.success) {
   // フォールバック: ストアページを開く
-  await client.openStoreListing(
-    iosAppId: '123456789',       // App Store の数値 ID
-    androidPackageName: null,    // null でアプリのパッケージ名を自動検出
-  );
+  await client.openStoreListing(iosAppId: '123456789');
 }
 ```
 
@@ -79,6 +76,9 @@ final controller = ReviewController(
     minActionCount: 3,          // ユーザーアクション3回以上
     maxRequestCount: 3,         // アプリ側リクエスト上限3回
   ),
+  // レビューダイアログ失敗時にストアページを自動で開く
+  iosAppId: '123456789',
+  fallbackToStoreListing: true,
   onReviewRequested: (result) {
     // アナリティクスにログ送信
     analytics.logReviewRequested(success: result.success);
@@ -91,7 +91,7 @@ await controller.recordFirstLaunch();
 // ユーザーが重要なアクション（シェア、保存、完了など）を実行した時に呼ぶ
 await controller.recordAction();
 
-// 全条件を満たせばレビューダイアログを表示
+// 全条件を満たせばレビューダイアログを表示（失敗時はストアページにフォールバック）
 final didRequest = await controller.requestReviewIfEligible();
 ```
 
@@ -101,6 +101,8 @@ final didRequest = await controller.requestReviewIfEligible();
 @riverpod
 ReviewController reviewController(Ref ref) {
   return ReviewController(
+    iosAppId: '123456789',
+    fallbackToStoreListing: true,
     onReviewRequested: (result) {
       appAnalytics.logReviewRequested(success: result.success);
     },
@@ -133,7 +135,7 @@ class ReviewService extends _$ReviewService {
 | メソッド | 説明 |
 |---|---|
 | `requestReview()` | ネイティブのレビューダイアログを表示（OS が実際に表示するかは制御不可） |
-| `openStoreListing({iosAppId, androidPackageName})` | ストアページを直接開く（フォールバック用） |
+| `openStoreListing({iosAppId, androidPackageName})` | ストアページを直接開く（フォールバック用）。プラットフォームに応じて適切なパラメータが自動選択される |
 
 ### `ReviewController`
 
@@ -144,7 +146,17 @@ class ReviewService extends _$ReviewService {
 | `recordFirstLaunch()` | 初回起動日時を記録（記録済みなら何もしない） |
 | `recordAction()` | ユーザーアクションカウントをインクリメント |
 | `requestReviewIfEligible()` | 全条件を確認し、満たせばレビューをリクエスト。`true` = リクエスト実行済み |
-| `reset()` | 全状態をリセット（テスト・デバッグ用） |
+| `reset()` | 全状態をリセット（`@visibleForTesting`） |
+
+| コンストラクタパラメータ | 型 | デフォルト | 説明 |
+|---|---|---|---|
+| `condition` | `ReviewCondition` | デフォルト値 | レビュー条件設定 |
+| `client` | `AppReviewClient?` | 自動生成 | DI用。テスト時にモック差し替え可能 |
+| `prefs` | `SharedPreferences?` | 遅延取得 | DI用。テスト時に `SharedPreferences.setMockInitialValues()` の代わりに直接注入可能 |
+| `onReviewRequested` | `Function(ReviewResult)?` | `null` | レビューリクエスト完了後のコールバック |
+| `iosAppId` | `String?` | `null` | App Store の数値ID（フォールバック時に使用） |
+| `androidPackageName` | `String?` | `null` | Androidパッケージ名（フォールバック時。null で自動検出） |
+| `fallbackToStoreListing` | `bool` | `false` | レビューダイアログ失敗時にストアページへフォールバックするか |
 
 ### `ReviewCondition`
 
@@ -214,9 +226,13 @@ dart run pigeon --input pigeons/messages.dart
 final mockApi = MockReviewApi();  // Pigeon の ReviewApi を実装
 final client = AppReviewClient(api: mockApi);
 
-// ReviewController のモック差し替え
-final mockClient = MockAppReviewClient();
-final controller = ReviewController(client: mockClient);
+// ReviewController のモック差し替え（SharedPreferences も注入可能）
+SharedPreferences.setMockInitialValues({});
+final prefs = await SharedPreferences.getInstance();
+final controller = ReviewController(
+  client: AppReviewClient(api: mockApi),
+  prefs: prefs,
+);
 ```
 
 ## ライセンス

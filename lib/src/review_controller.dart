@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_review_client.dart';
@@ -48,6 +49,8 @@ class ReviewCondition {
 ///     minActionCount: 1,
 ///     maxRequestCount: 3,
 ///   ),
+///   iosAppId: '123456789',
+///   fallbackToStoreListing: true,
 /// );
 ///
 /// // Call once at app startup
@@ -65,34 +68,67 @@ class ReviewController {
   /// - [condition]: The conditions that must be met.
   /// - [client]: An [AppReviewClient] instance. If null,
   ///   a default instance is created.
+  /// - [prefs]: A [SharedPreferences] instance for persistence.
+  ///   If null, [SharedPreferences.getInstance()] is used lazily.
+  ///   Passing an instance explicitly improves testability.
   /// - [onReviewRequested]: Optional callback invoked after
   ///   a review is requested, with the [ReviewResult].
   ///   Useful for analytics logging.
+  /// - [iosAppId]: The numeric App Store ID (e.g. "123456789").
+  ///   Used when [fallbackToStoreListing] is `true` on iOS.
+  /// - [androidPackageName]: The Android package name. If null,
+  ///   the native side auto-detects it. Used when
+  ///   [fallbackToStoreListing] is `true` on Android.
+  /// - [fallbackToStoreListing]: When `true`, if the in-app
+  ///   review dialog fails, the store listing page is opened
+  ///   automatically as a fallback.
   ReviewController({
     this.condition = const ReviewCondition(),
     AppReviewClient? client,
+    SharedPreferences? prefs,
     this.onReviewRequested,
-  }) : _client = client ?? AppReviewClient();
+    this.iosAppId,
+    this.androidPackageName,
+    this.fallbackToStoreListing = false,
+  }) : _client = client ?? AppReviewClient(),
+       _prefs = prefs;
 
   /// The conditions that must all be met for a review request.
   final ReviewCondition condition;
 
   final AppReviewClient _client;
 
+  SharedPreferences? _prefs;
+
   /// Optional callback invoked after a review request completes.
   final void Function(ReviewResult result)? onReviewRequested;
+
+  /// The numeric App Store ID for iOS store listing fallback.
+  final String? iosAppId;
+
+  /// The Android package name for store listing fallback.
+  /// If null, the native side auto-detects the package name.
+  final String? androidPackageName;
+
+  /// Whether to open the store listing page when the in-app
+  /// review dialog fails.
+  final bool fallbackToStoreListing;
 
   // SharedPreferences keys
   static const _keyFirstLaunchedAt = 'app_review_first_launched_at';
   static const _keyActionCount = 'app_review_action_count';
   static const _keyRequestCount = 'app_review_request_count';
 
+  Future<SharedPreferences> _getPrefs() async {
+    return _prefs ??= await SharedPreferences.getInstance();
+  }
+
   /// Record the app's first launch timestamp.
   ///
   /// Call this once during app initialization. If already
   /// recorded, this is a no-op.
   Future<void> recordFirstLaunch() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
     if (prefs.getString(_keyFirstLaunchedAt) != null) return;
     await prefs.setString(_keyFirstLaunchedAt, DateTime.now().toIso8601String());
   }
@@ -102,7 +138,7 @@ class ReviewController {
   /// Increments the internal action counter used for
   /// eligibility checking.
   Future<void> recordAction() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
     final current = prefs.getInt(_keyActionCount) ?? 0;
     await prefs.setInt(_keyActionCount, current + 1);
   }
@@ -112,10 +148,14 @@ class ReviewController {
   /// Returns `true` if a review request was actually made
   /// (regardless of whether the OS showed the dialog).
   ///
+  /// When [fallbackToStoreListing] is `true` and the review
+  /// dialog request fails, the store listing page is opened
+  /// automatically as a fallback.
+  ///
   /// Returns `false` if any condition was not met or the
-  /// request failed.
+  /// request (and fallback, if enabled) failed.
   Future<bool> requestReviewIfEligible() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
 
     // Condition 1: action count
     final actionCount = prefs.getInt(_keyActionCount) ?? 0;
@@ -134,7 +174,15 @@ class ReviewController {
     if (requestCount >= condition.maxRequestCount) return false;
 
     // All conditions met — request review
-    final result = await _client.requestReview();
+    var result = await _client.requestReview();
+
+    // Fallback to store listing on failure
+    if (!result.success && fallbackToStoreListing) {
+      result = await _client.openStoreListing(
+        iosAppId: iosAppId,
+        androidPackageName: androidPackageName,
+      );
+    }
 
     // Record request (count regardless of success)
     await prefs.setInt(_keyRequestCount, requestCount + 1);
@@ -146,10 +194,10 @@ class ReviewController {
 
   /// Reset all tracked state.
   ///
-  /// Useful for testing or when the user re-installs. Clears
-  /// first-launch date, action count, and request count.
+  /// Clears first-launch date, action count, and request count.
+  @visibleForTesting
   Future<void> reset() async {
-    final prefs = await SharedPreferences.getInstance();
+    final prefs = await _getPrefs();
     await Future.wait([
       prefs.remove(_keyFirstLaunchedAt),
       prefs.remove(_keyActionCount),

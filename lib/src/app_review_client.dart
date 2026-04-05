@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'messages.g.dart';
 
 /// Thin wrapper around the native In-App Review API.
@@ -35,15 +37,14 @@ class AppReviewClient {
   /// Use this as a fallback when the in-app review dialog cannot
   /// be shown, or when you want to direct users to the store.
   ///
-  /// - [iosAppId]: The numeric App Store ID (e.g. "123456789").
-  ///   Required on iOS. On Android this is ignored and the
-  ///   package name is auto-detected.
-  /// - [androidPackageName]: The Android package name. If null,
-  ///   the current app's package name is used automatically.
+  /// On iOS, [iosAppId] (the numeric App Store ID, e.g. "123456789")
+  /// is sent to the native side. On Android, [androidPackageName] is
+  /// sent; if null, the native side auto-detects the package name.
+  ///
+  /// Each parameter is only used on its respective platform, so
+  /// specifying both is safe for cross-platform code.
   Future<ReviewResult> openStoreListing({String? iosAppId, String? androidPackageName}) {
-    // The native side handles appId per platform:
-    // - Android: uses it as package name (or auto-detects if null)
-    // - iOS: uses it as App Store numeric ID
-    return _api.openStoreListing(iosAppId ?? androidPackageName);
+    final appId = Platform.isIOS ? iosAppId : androidPackageName;
+    return _api.openStoreListing(appId);
   }
 }
