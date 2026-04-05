@@ -1,0 +1,38 @@
+name: app_review
+description: >-
+  In-app review plugin using native platform APIs (Google Play In-App Review
+  and iOS StoreKit). Includes an optional ReviewController for smart review
+  request timing based on configurable conditions.
+version: 0.1.0
+homepage: https://github.com/shimane0/app_review
+repository: https://github.com/shimane0/app_review
+
+environment:
+  sdk: ^3.9.0
+  flutter: '>=3.28.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  pigeon: ^26.1.7
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.ochipan.app_review
+        pluginClass: AppReviewPlugin
+      ios:
+        pluginClass: AppReviewPlugin
+
+topics:
+  - review
+  - in-app-review
+  - store-review
+  - rating
