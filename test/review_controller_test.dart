@@ -98,10 +98,7 @@ void main() {
         await prefs.setInt('app_review_action_count', 5);
         // First launch 10 days ago (default minDaysFromFirstLaunch = 3)
         final tenDaysAgo = DateTime.now().subtract(const Duration(days: 10));
-        await prefs.setString(
-          'app_review_first_launched_at',
-          tenDaysAgo.toIso8601String(),
-        );
+        await prefs.setString('app_review_first_launched_at', tenDaysAgo.toIso8601String());
         // Request count < 3 (default maxRequestCount)
         await prefs.setInt('app_review_request_count', 0);
       }
@@ -163,10 +160,7 @@ void main() {
       });
 
       test('increments request count even on failure', () async {
-        fakeApi.requestReviewResult = ReviewResult(
-          success: false,
-          errorMessage: 'fail',
-        );
+        fakeApi.requestReviewResult = ReviewResult(success: false, errorMessage: 'fail');
         final controller = createController();
         await makeEligible();
 
@@ -178,9 +172,7 @@ void main() {
 
       test('invokes onReviewRequested callback', () async {
         ReviewResult? callbackResult;
-        final controller = createController(
-          onReviewRequested: (r) => callbackResult = r,
-        );
+        final controller = createController(onReviewRequested: (r) => callbackResult = r);
         await makeEligible();
 
         await controller.requestReviewIfEligible();
@@ -194,41 +186,26 @@ void main() {
       Future<void> makeEligible() async {
         await prefs.setInt('app_review_action_count', 5);
         final tenDaysAgo = DateTime.now().subtract(const Duration(days: 10));
-        await prefs.setString(
-          'app_review_first_launched_at',
-          tenDaysAgo.toIso8601String(),
-        );
+        await prefs.setString('app_review_first_launched_at', tenDaysAgo.toIso8601String());
         await prefs.setInt('app_review_request_count', 0);
       }
 
-      test(
-        'opens store listing when review fails and fallback enabled',
-        () async {
-          fakeApi.requestReviewResult = ReviewResult(
-            success: false,
-            errorMessage: 'fail',
-          );
-          fakeApi.openStoreListingResult = ReviewResult(success: true);
+      test('opens store listing when review fails and fallback enabled', () async {
+        fakeApi.requestReviewResult = ReviewResult(success: false, errorMessage: 'fail');
+        fakeApi.openStoreListingResult = ReviewResult(success: true);
 
-          final controller = createController(
-            iosAppId: '123456789',
-            fallbackToStoreListing: true,
-          );
-          await makeEligible();
+        final controller = createController(iosAppId: '123456789', fallbackToStoreListing: true);
+        await makeEligible();
 
-          final result = await controller.requestReviewIfEligible();
+        final result = await controller.requestReviewIfEligible();
 
-          expect(result, isTrue);
-          expect(fakeApi.requestReviewCallCount, 1);
-          expect(fakeApi.openStoreListingCallCount, 1);
-        },
-      );
+        expect(result, isTrue);
+        expect(fakeApi.requestReviewCallCount, 1);
+        expect(fakeApi.openStoreListingCallCount, 1);
+      });
 
       test('does not open store listing when review succeeds', () async {
-        final controller = createController(
-          iosAppId: '123456789',
-          fallbackToStoreListing: true,
-        );
+        final controller = createController(iosAppId: '123456789', fallbackToStoreListing: true);
         await makeEligible();
 
         await controller.requestReviewIfEligible();
@@ -237,10 +214,7 @@ void main() {
       });
 
       test('does not open store listing when fallback disabled', () async {
-        fakeApi.requestReviewResult = ReviewResult(
-          success: false,
-          errorMessage: 'fail',
-        );
+        fakeApi.requestReviewResult = ReviewResult(success: false, errorMessage: 'fail');
 
         final controller = createController(fallbackToStoreListing: false);
         await makeEligible();
@@ -257,12 +231,96 @@ void main() {
 
         await controller.recordFirstLaunch();
         await controller.recordAction();
-        // ignore: invalid_use_of_visible_for_testing_member
         await controller.reset();
 
         expect(prefs.getString('app_review_first_launched_at'), isNull);
         expect(prefs.getInt('app_review_action_count'), isNull);
         expect(prefs.getInt('app_review_request_count'), isNull);
+      });
+    });
+
+    group('getStatus', () {
+      test('returns initial status with zero counts', () async {
+        final controller = createController();
+
+        final status = await controller.getStatus();
+
+        expect(status.actionCount, 0);
+        expect(status.requestCount, 0);
+        expect(status.firstLaunchedAt, isNull);
+        expect(status.daysSinceFirstLaunch, isNull);
+      });
+
+      test('reflects recorded actions and first launch', () async {
+        final controller = createController();
+
+        await controller.recordFirstLaunch();
+        await controller.recordAction();
+        await controller.recordAction();
+
+        final status = await controller.getStatus();
+
+        expect(status.actionCount, 2);
+        expect(status.requestCount, 0);
+        expect(status.firstLaunchedAt, isNotNull);
+        expect(status.daysSinceFirstLaunch, 0);
+      });
+
+      test('includes condition thresholds', () async {
+        final controller = createController(
+          condition: const ReviewCondition(
+            minActionCount: 5,
+            minDaysFromFirstLaunch: 7,
+            maxRequestCount: 2,
+          ),
+        );
+
+        final status = await controller.getStatus();
+
+        expect(status.condition.minActionCount, 5);
+        expect(status.condition.minDaysFromFirstLaunch, 7);
+        expect(status.condition.maxRequestCount, 2);
+      });
+    });
+
+    group('forceRequestReview', () {
+      test('requests review without checking conditions', () async {
+        final controller = createController();
+        // No actions, no first launch — conditions NOT met
+
+        final result = await controller.forceRequestReview();
+
+        expect(result.success, isTrue);
+        expect(fakeApi.requestReviewCallCount, 1);
+      });
+
+      test('does not increment request count', () async {
+        final controller = createController();
+
+        await controller.forceRequestReview();
+        await controller.forceRequestReview();
+
+        expect(prefs.getInt('app_review_request_count'), isNull);
+      });
+
+      test('invokes onReviewRequested callback', () async {
+        ReviewResult? callbackResult;
+        final controller = createController(onReviewRequested: (r) => callbackResult = r);
+
+        await controller.forceRequestReview();
+
+        expect(callbackResult, isNotNull);
+        expect(callbackResult!.success, isTrue);
+      });
+
+      test('returns failure result on API error', () async {
+        fakeApi.requestReviewResult = ReviewResult(success: false, errorMessage: 'not available');
+        final controller = createController();
+
+        final result = await controller.forceRequestReview();
+
+        expect(result.success, isFalse);
+        expect(result.errorMessage, 'not available');
       });
     });
   });

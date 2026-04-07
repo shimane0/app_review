@@ -1,8 +1,40 @@
-import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app_review_client.dart';
 import 'messages.g.dart';
+
+/// Snapshot of the review tracking state.
+///
+/// Returned by [ReviewController.getStatus] for display
+/// in debug/preview UIs.
+class ReviewStatus {
+  /// Creates a [ReviewStatus].
+  const ReviewStatus({
+    required this.actionCount,
+    required this.requestCount,
+    required this.firstLaunchedAt,
+    required this.condition,
+  });
+
+  /// Number of recorded user actions.
+  final int actionCount;
+
+  /// Number of review requests already made.
+  final int requestCount;
+
+  /// Timestamp of the first recorded launch, or `null`
+  /// if [ReviewController.recordFirstLaunch] was never called.
+  final DateTime? firstLaunchedAt;
+
+  /// The condition thresholds being used.
+  final ReviewCondition condition;
+
+  /// Days elapsed since first launch, or `null` if not recorded.
+  int? get daysSinceFirstLaunch {
+    if (firstLaunchedAt == null) return null;
+    return DateTime.now().difference(firstLaunchedAt!).inDays;
+  }
+}
 
 /// Configuration for [ReviewController] conditions.
 ///
@@ -130,10 +162,7 @@ class ReviewController {
   Future<void> recordFirstLaunch() async {
     final prefs = await _getPrefs();
     if (prefs.getString(_keyFirstLaunchedAt) != null) return;
-    await prefs.setString(
-      _keyFirstLaunchedAt,
-      DateTime.now().toIso8601String(),
-    );
+    await prefs.setString(_keyFirstLaunchedAt, DateTime.now().toIso8601String());
   }
 
   /// Record a user action (e.g. share, save, complete).
@@ -169,9 +198,7 @@ class ReviewController {
     if (firstLaunchedStr == null) return false;
     final firstLaunched = DateTime.tryParse(firstLaunchedStr);
     if (firstLaunched == null) return false;
-    final daysSinceFirstLaunch = DateTime.now()
-        .difference(firstLaunched)
-        .inDays;
+    final daysSinceFirstLaunch = DateTime.now().difference(firstLaunched).inDays;
     if (daysSinceFirstLaunch < condition.minDaysFromFirstLaunch) return false;
 
     // Condition 3: request count limit
@@ -200,7 +227,7 @@ class ReviewController {
   /// Reset all tracked state.
   ///
   /// Clears first-launch date, action count, and request count.
-  @visibleForTesting
+  /// Useful for debug/preview UIs and tests.
   Future<void> reset() async {
     final prefs = await _getPrefs();
     await Future.wait([
@@ -208,5 +235,35 @@ class ReviewController {
       prefs.remove(_keyActionCount),
       prefs.remove(_keyRequestCount),
     ]);
+  }
+
+  /// Get the current review tracking status.
+  ///
+  /// Returns a [ReviewStatus] snapshot containing the current
+  /// action count, request count, first-launch timestamp, and
+  /// the configured conditions.
+  Future<ReviewStatus> getStatus() async {
+    final prefs = await _getPrefs();
+    final actionCount = prefs.getInt(_keyActionCount) ?? 0;
+    final requestCount = prefs.getInt(_keyRequestCount) ?? 0;
+    final firstLaunchedStr = prefs.getString(_keyFirstLaunchedAt);
+    final firstLaunchedAt = firstLaunchedStr != null ? DateTime.tryParse(firstLaunchedStr) : null;
+    return ReviewStatus(
+      actionCount: actionCount,
+      requestCount: requestCount,
+      firstLaunchedAt: firstLaunchedAt,
+      condition: condition,
+    );
+  }
+
+  /// Request an in-app review bypassing all conditions.
+  ///
+  /// Intended for debug/preview UIs to verify that the native
+  /// review dialog can be displayed. Does **not** increment the
+  /// request counter.
+  Future<ReviewResult> forceRequestReview() async {
+    final result = await _client.requestReview();
+    onReviewRequested?.call(result);
+    return result;
   }
 }
