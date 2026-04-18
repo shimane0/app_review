@@ -258,6 +258,17 @@ void main() {
         expect(await store.getRequestCount(), 0);
       });
 
+      test('records lastRequestedAt when user responds negative (cooldown)', () async {
+        // Prevents the pre-prompt from being shown again on every subsequent action.
+        final controller = createController(prePrompt: () async => PrePromptResponse.negative);
+        await makeEligible();
+
+        await controller.requestReviewIfEligible();
+
+        final lastRequested = await store.getLastRequestedAt();
+        expect(lastRequested, isNotNull);
+      });
+
       test('invokes onNegativeFeedback when user responds negative', () async {
         var negativeCalled = false;
         final controller = createController(
@@ -280,6 +291,40 @@ void main() {
         expect(result, ReviewRequestResult.dismissedFromPrePrompt);
         expect(fakeApi.requestReviewCallCount, 0);
         expect(await store.getRequestCount(), 0);
+      });
+
+      test('records lastRequestedAt when user dismisses (cooldown)', () async {
+        // Prevents the pre-prompt from being shown again on every subsequent action —
+        // this was the "infinite loop" bug fix.
+        final controller = createController(prePrompt: () async => PrePromptResponse.dismissed);
+        await makeEligible();
+
+        await controller.requestReviewIfEligible();
+
+        final lastRequested = await store.getLastRequestedAt();
+        expect(lastRequested, isNotNull);
+      });
+
+      test('cooldown after dismissal prevents immediate re-prompt', () async {
+        var promptCallCount = 0;
+        final controller = createController(
+          condition: const ReviewCondition(
+            minActionCount: 1,
+            minDaysFromFirstLaunch: 0,
+            minHoursBetweenRequests: 24,
+          ),
+          prePrompt: () async {
+            promptCallCount++;
+            return PrePromptResponse.dismissed;
+          },
+        );
+        await makeEligible();
+
+        await controller.requestReviewIfEligible();
+        await controller.recordAction();
+        await controller.requestReviewIfEligible();
+
+        expect(promptCallCount, 1); // 2回目はcooldownでスキップ
       });
 
       test('does not show pre-prompt when conditions not met', () async {

@@ -267,7 +267,13 @@ class ReviewController {
   /// after conditions pass (legacy behaviour).
   ///
   /// The request count is only incremented when the OS dialog
-  /// is actually requested (steps 3 or legacy).
+  /// is actually requested (step 3 or legacy).
+  ///
+  /// The cooldown timestamp ([ReviewStateStore.setLastRequestedAt])
+  /// is updated on **any** path where the pre-prompt is shown
+  /// (positive/negative/dismissed). This ensures the pre-prompt
+  /// is not shown again within [ReviewCondition.minHoursBetweenRequests]
+  /// regardless of the user's response.
   Future<ReviewRequestResult> requestReviewIfEligible() async {
     // Condition 1: action count
     final actionCount = await _store.getActionCount();
@@ -305,9 +311,17 @@ class ReviewController {
       final response = await prePrompt!();
       switch (response) {
         case PrePromptResponse.negative:
+          // Record prompt shown time so the cooldown applies even
+          // when the user declines — this prevents the pre-prompt
+          // from being shown again on every subsequent action.
+          await _store.setLastRequestedAt(DateTime.now());
           onNegativeFeedback?.call();
           return ReviewRequestResult.negativeFromPrePrompt;
         case PrePromptResponse.dismissed:
+          // Record prompt shown time so the cooldown applies even
+          // when the user dismisses — without this the pre-prompt
+          // would reappear on every subsequent action.
+          await _store.setLastRequestedAt(DateTime.now());
           return ReviewRequestResult.dismissedFromPrePrompt;
         case PrePromptResponse.positive:
           break; // Continue to OS dialog
