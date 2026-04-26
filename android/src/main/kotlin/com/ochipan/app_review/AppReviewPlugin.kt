@@ -3,8 +3,11 @@ package com.ochipan.app_review
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
+import com.google.android.play.core.review.ReviewManager
 import com.google.android.play.core.review.ReviewManagerFactory
+import com.google.android.play.core.review.testing.FakeReviewManager
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -67,7 +70,7 @@ class AppReviewPlugin : FlutterPlugin, ActivityAware, ReviewApi {
             return
         }
 
-        val reviewManager = ReviewManagerFactory.create(currentActivity)
+        val reviewManager = createReviewManager(currentActivity)
         val requestFlow = reviewManager.requestReviewFlow()
 
         requestFlow.addOnCompleteListener { task ->
@@ -140,4 +143,24 @@ class AppReviewPlugin : FlutterPlugin, ActivityAware, ReviewApi {
     }
 
     // endregion
+
+    /**
+     * Resolve the appropriate [ReviewManager] for the current build.
+     *
+     * Google's In-App Review API is silent (no dialog) when the app is not
+     * installed from Google Play (debug, sideloaded, internal test track in
+     * some cases). To make preview/debug builds actually show a review dialog
+     * for QA verification, fall back to [FakeReviewManager] whenever the
+     * application is flagged debuggable. Release/Play Store builds keep the
+     * real [ReviewManagerFactory.create] path.
+     */
+    internal fun createReviewManager(activity: Activity): ReviewManager {
+        val isDebuggable =
+            (activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        return if (isDebuggable) {
+            FakeReviewManager(activity)
+        } else {
+            ReviewManagerFactory.create(activity)
+        }
+    }
 }
