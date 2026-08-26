@@ -6,7 +6,7 @@ import 'package:pigeon/pigeon.dart';
     dartPackageName: 'app_review',
     kotlinOut: 'android/src/main/kotlin/com/ochipan/app_review/Messages.g.kt',
     kotlinOptions: KotlinOptions(package: 'com.ochipan.app_review'),
-    swiftOut: 'ios/Classes/Messages.g.swift',
+    swiftOut: 'ios/app_review/Sources/app_review/Messages.g.swift',
   ),
 )
 /// Result of a review request operation.
